@@ -125,22 +125,25 @@ html {
   }
 }
 
-/* Font auto-detection system */
-@layer utilities {
-  @layer base {
-    :root {
-      font-family: var(--font-bangla);
-    }
+/* Typography & Language Font System */
+@layer base {
+  /* Default or Bengali mode typography */
+  html[lang="bn"],
+  html[lang="bn"] body {
+    font-family: var(--font-bangla), "Tiro Bangla", "Noto Serif Bengali", serif;
+    letter-spacing: 0.012em;
+    line-height: 1.6;
+  }
 
-    /* English text detection */
-    @font-face {
-      font-family: "Auto";
-      src: local(var(--font-english));
-      unicode-range: U+0000-007F; /* Basic Latin (English) */
-    }
+  /* English mode typography */
+  html[lang="en"],
+  html[lang="en"] body {
+    font-family: var(--font-english), "Poppins", system-ui, sans-serif;
+    letter-spacing: normal;
+  }
 
-    body {
-      font-family: "Auto", var(--font-bangla);
-    }
+  /* Fallback body */
+  body {
+    font-family: var(--font-bangla), var(--font-english), sans-serif;
   }
 }

@@ -29,6 +29,10 @@ export default {
       container: {
         padding: "", // if i add padding, the container will be wider than the screen
       },
+      fontFamily: {
+        bangla: ["var(--font-bangla)", "Tiro Bangla", "SolaimanLipi", "Kalpurush", "serif"],
+        english: ["var(--font-english)", "Poppins", "sans-serif"],
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

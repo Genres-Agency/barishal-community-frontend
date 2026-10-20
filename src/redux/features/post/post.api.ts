@@ -8,9 +8,17 @@ const postApi = baseApi.injectEndpoints({
         const params = new URLSearchParams();
 
         if (args) {
-          args.forEach((item: TQueryParam) => {
-            params.append(item.name, item.value as string);
-          });
+          if (Array.isArray(args)) {
+            args.forEach((item: TQueryParam) => {
+              params.append(item.name, item.value as string);
+            });
+          } else if (typeof args === "object") {
+            Object.entries(args).forEach(([k, v]) => {
+              if (v !== undefined && v !== null && v !== "") {
+                params.append(k, String(v));
+              }
+            });
+          }
         }
 
         return {
@@ -30,10 +38,9 @@ const postApi = baseApi.injectEndpoints({
     }),
     // Get Single post
     getSinglePost: builder.query({
-      query: (postId) => ({
+      query: (postId: number) => ({
         url: `/posts/${postId}`,
         method: "GET",
-        params: postId,
       }),
       providesTags: ["Post"],
     }),

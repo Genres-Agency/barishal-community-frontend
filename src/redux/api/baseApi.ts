@@ -15,9 +15,7 @@ const baseQuery = fetchBaseQuery({
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth.token;
-    console.log("token", token);
 
-    headers.set("Content-Type", "application/json");
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
@@ -105,6 +103,6 @@ const baseQueryWithRefreshToken: BaseQueryFn<
 export const baseApi = createApi({
   reducerPath: "baseApi",
   baseQuery: baseQueryWithRefreshToken,
-  tagTypes: ["Admin", "User", "Post", "Category", "Hashtag", "Like", "Comment"],
+  tagTypes: ["Admin", "User", "Post", "Category", "Hashtag", "Like", "Comment", "Transit", "Healthcare", "Services"],
   endpoints: () => ({}),
 });

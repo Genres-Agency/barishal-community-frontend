@@ -61,22 +61,20 @@ const categoriesApi = baseApi.injectEndpoints({
       invalidatesTags: ["Category"],
     }),
 
-    // Update exesting post
+    // Update existing category
     updateCategory: builder.mutation({
       query: ({ id, ...data }) => ({
         url: `/category/${id}`,
         method: "PATCH",
-        params: id,
         body: data,
       }),
       invalidatesTags: ["Category"],
     }),
-    // Delete a post
+    // Delete a category
     deleteCategory: builder.mutation({
-      query: (id) => ({
+      query: (id: number) => ({
         url: `/category/${id}`,
         method: "DELETE",
-        params: id,
       }),
       invalidatesTags: ["Category"],
     }),

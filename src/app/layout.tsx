@@ -3,19 +3,12 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import ReduxProvider from "@/lib/providers/ReduxProviders";
 import type { Metadata } from "next";
 import { Poppins, Tiro_Bangla } from "next/font/google";
-import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const arial = localFont({
-  src: "./fonts/arial.ttf",
-  variable: "--font-bangla",
-  display: "swap",
-});
-
 const tiro_bangla = Tiro_Bangla({
   weight: "400",
-  subsets: ["latin"],
+  subsets: ["bengali"],
   variable: "--font-bangla",
   display: "swap",
 });
@@ -48,23 +41,27 @@ export const metadata: Metadata = {
   },
 };
 
+import { LocaleProvider } from "@/lib/i18n";
+
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${tiro_bangla.variable} ${poppins.variable}`}>
-      <body className="bg-gray-50">
+    <html lang="bn" className={`${tiro_bangla.variable} ${poppins.variable}`}>
+      <body className="bg-gray-50 text-gray-900 min-h-screen flex flex-col font-sans">
         <ReduxProvider>
-          <ErrorBoundary>
-            {/* Sticky Navbar */}
-            <div className="sticky top-0 z-50">
-              <Navbar />
-            </div>
-            {children}
-          </ErrorBoundary>
-          <Toaster />
+          <LocaleProvider>
+            <ErrorBoundary>
+              {/* Sticky Navbar */}
+              <div className="sticky top-0 z-50">
+                <Navbar />
+              </div>
+              <main className="flex-1 pb-16 md:pb-0">{children}</main>
+            </ErrorBoundary>
+            <Toaster position="top-center" richColors />
+          </LocaleProvider>
         </ReduxProvider>
       </body>
     </html>

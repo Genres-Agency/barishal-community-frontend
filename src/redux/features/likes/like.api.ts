@@ -4,20 +4,18 @@ const likeApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Get Single post
     getSingleLike: builder.query({
-      query: (postId) => ({
+      query: (postId: number) => ({
         url: `/likes/${postId}`,
         method: "GET",
-        params: postId,
       }),
       providesTags: ["Like"],
     }),
 
-    // Update exesting post
+    // Toggle like on post
     toggleLike: builder.mutation({
-      query: ({ postId }) => ({
+      query: ({ postId }: { postId: number }) => ({
         url: `/likes/${postId}`,
         method: "PATCH",
-        params: postId,
       }),
       invalidatesTags: ["Like"],
     }),

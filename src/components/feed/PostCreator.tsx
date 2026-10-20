@@ -1,4 +1,6 @@
 "use client";
+
+import React, { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,227 +9,254 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useGetAllCategoryQuery } from "@/redux/features/category/category.api";
 import { useAddPostMutation } from "@/redux/features/post/post.api";
-import { Image, X } from "lucide-react";
-import { useState } from "react";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
+import { useAppSelector } from "@/redux/hooks";
+import { selectCurrentUser } from "@/redux/features/auth/authSlice";
+import { useGetUserQuery } from "@/redux/features/auth/authApi";
+import { useLocale } from "@/lib/i18n";
+import { Image as ImageIcon, X, Send, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
-const PostCreator: React.FC = () => {
+export default function PostCreator() {
+  const { locale } = useLocale();
+  const isBn = locale === "bn";
+
   const [postContent, setPostContent] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("reports");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [addPost] = useAddPostMutation();
 
-  const { data: categories } = useGetAllCategoryQuery(undefined);
+  const currentUser = useAppSelector(selectCurrentUser);
+  const { data: userProfile } = useGetUserQuery(undefined, {
+    skip: !currentUser?.userId,
+  });
+
+  const { data: categories = [] } = useGetAllCategoryQuery(undefined);
+  const [addPost, { isLoading }] = useAddPostMutation();
+
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(String(categories[0].id));
+    }
+  }, [categories, selectedCategory]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-
     if (selectedFile) {
       setFile(selectedFile);
       if (preview) {
         URL.revokeObjectURL(preview);
       }
-      setPreview(URL.createObjectURL(selectedFile)); // Preview the image
+      setPreview(URL.createObjectURL(selectedFile));
     }
   };
 
-  const handlePostSubmit = async () => {
+  const handlePostSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!postContent.trim() && !file) return;
+
+    if (!currentUser?.userId) {
+      toast.error(
+        isBn
+          ? "পোস্ট তৈরি করতে অনুগ্রহ করে প্রথমে সাইন ইন করুন।"
+          : "Please sign in to publish a community post."
+      );
+      return;
+    }
 
     try {
       const data = new FormData();
-
-      // Add data to FormData
-      data.append("content", postContent);
-      data.append("categoryId", selectedCategory);
-      data.append("hashTag", "#programming");
+      data.append("content", postContent.trim());
+      data.append("categoryId", selectedCategory || String(categories[0]?.id || 1));
 
       if (file) {
         data.append("image", file);
       }
 
-      // Log what we're sending
-      console.log("Sending post data:");
-      for (let [key, value] of data.entries()) {
-        console.log(`${key}: ${value}`);
+      const result = await addPost(data).unwrap();
+
+      toast.success(
+        isBn
+          ? "আপনার পোস্ট সফলভাবে প্রকাশিত হয়েছে!"
+          : "Post published successfully!"
+      );
+
+      // Reset
+      setPostContent("");
+      if (preview) {
+        URL.revokeObjectURL(preview);
       }
-
-      // Call the API and capture the response
-      const result = await addPost(data);
-      console.log("API Response:", result);
-
-      // RTK Query returns an object with either 'data' or 'error'
-      if ("data" in result) {
-        console.log("Post created successfully:", result.data);
-
-        // Reset form state
-        setPostContent("");
-        setSelectedCategory("reports");
-        if (preview) {
-          URL.revokeObjectURL(preview);
-        }
-        setFile(null);
-        setPreview(null);
-        setIsModalOpen(false);
-      } else if ("error" in result) {
-        // More detailed error logging
-        console.error("API Error Response:", result.error);
-
-        // Fix the type issue by using a type guard
-        let errorMessage = "Failed to create post";
-
-        // Use a safer approach to check for error data
-        const errorData = result.error as any;
-        if (errorData && typeof errorData === "object" && "data" in errorData) {
-          errorMessage += `: ${JSON.stringify(errorData.data)}`;
-        }
-
-        console.log(errorMessage);
-      }
-    } catch (error) {
-      console.error("Exception during post creation:", error);
-      alert("An unexpected error occurred. Please try again later.");
+      setFile(null);
+      setPreview(null);
+      setIsModalOpen(false);
+    } catch (err: any) {
+      toast.error(
+        err?.data?.message ||
+          (isBn
+            ? "পোস্ট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+            : "Failed to publish post. Please try again.")
+      );
     }
   };
 
+  const authorDisplayName = userProfile
+    ? `${userProfile.firstName || ""} ${userProfile.lastName || ""}`.trim()
+    : isBn
+    ? "বরিশালবাসী নাগরিক"
+    : "Barishal Resident";
+
   return (
-    <div className="px-3 sm:px-0">
-      <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4">
-        <div className="flex gap-2 sm:gap-4">
-          <Avatar className="w-8 h-8 sm:w-10 sm:h-10">
-            <AvatarImage className="object-cover" src="/assets/profile.jpg" />
-            <AvatarFallback>ME</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col w-full gap-3 sm:gap-4">
-            {/* This is now a button that opens the modal */}
-            <div
-              onClick={() => setIsModalOpen(true)}
-              className="w-full min-h-12 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm bg-[#f9fafb] text-gray-500 cursor-pointer flex items-center"
-            >
-              আপনার মনের কথা শেয়ার করুন...
-            </div>
-          </div>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-xs">
+      <div className="flex items-center gap-3">
+        <Avatar className="w-10 h-10 border border-emerald-100 dark:border-emerald-950">
+          <AvatarImage
+            src={userProfile?.avatar || "/assets/profile.jpg"}
+            alt={authorDisplayName}
+            className="object-cover"
+          />
+          <AvatarFallback className="bg-emerald-600 text-white font-bold text-sm">
+            {userProfile?.firstName?.[0] || "B"}
+          </AvatarFallback>
+        </Avatar>
+
+        <div
+          onClick={() => setIsModalOpen(true)}
+          className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors flex items-center justify-between border border-slate-200/60 dark:border-slate-700"
+        >
+          <span className="font-bangla">
+            {isBn
+              ? "বরিশালের যেকোনো নাগরিক তথ্য, অভিজ্ঞতা বা প্রশ্ন শেয়ার করুন..."
+              : "Share news, ask questions, or post community updates..."}
+          </span>
+          <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold shrink-0 hidden sm:inline-block">
+            {isBn ? "পোস্ট করুন" : "New Post"}
+          </span>
         </div>
       </div>
 
-      {/* Post Creation Modal - Facebook style */}
+      {/* Creation Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-auto max-h-[90vh]">
-          <DialogHeader className="p-4 border-b sticky top-0 bg-white z-10">
-            <DialogTitle className="text-center text-lg font-semibold">
-              পোস্ট তৈরি করুন
+        <DialogContent className="sm:max-w-xl p-0 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <DialogHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span>{isBn ? "নতুন কমিউনিটি পোস্ট" : "Create Community Post"}</span>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Avatar className="w-10 h-10">
-                <AvatarImage
-                  className="object-cover"
-                  src="/assets/profile.jpg"
-                />
-                <AvatarFallback>ME</AvatarFallback>
+          <form onSubmit={handlePostSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+            {/* User row */}
+            <div className="flex items-center gap-3">
+              <Avatar className="w-10 h-10 border border-emerald-100">
+                <AvatarImage src={userProfile?.avatar || "/assets/profile.jpg"} />
+                <AvatarFallback>{authorDisplayName[0]}</AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium">আশিক রহমান</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  {authorDisplayName}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {isBn ? "বরিশাল কমিউনিটি ফোরাম" : "Public Community Post"}
+                </p>
               </div>
             </div>
 
+            {/* Content Textarea */}
             <textarea
+              required
               value={postContent}
               onChange={(e) => setPostContent(e.target.value)}
-              placeholder="আপনার মনের কথা কি?"
-              className="w-full min-h-[150px] border-0 text-lg focus:outline-none resize-none"
-              autoFocus
+              placeholder={
+                isBn
+                  ? "কীর্তনখোলা লঞ্চের অভিজ্ঞতা, কোনো সড়ক বা ড্রেন সমস্যা, ঐতিহ্যবাহী মিষ্টির খোঁজ, কিংবা রক্তের জরুরি অনুরোধ বিস্তারিত লিখুন..."
+                  : "Write your post here... Share local information, experiences or emergency calls."
+              }
+              rows={4}
+              className="w-full p-3.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bangla resize-none"
             />
 
-            {/* Display image preview if available */}
+            {/* Image Preview */}
             {preview && (
-              <div className="mt-4 relative">
+              <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-60 bg-black/5">
                 <img
                   src={preview}
-                  alt="Selected image"
-                  className="w-full max-h-60 object-contain rounded-md"
+                  alt="Post preview"
+                  className="w-full h-auto max-h-60 object-contain mx-auto"
                 />
                 <button
+                  type="button"
                   onClick={() => {
-                    if (preview) {
-                      URL.revokeObjectURL(preview);
-                    }
+                    if (preview) URL.revokeObjectURL(preview);
                     setFile(null);
                     setPreview(null);
                   }}
-                  className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1"
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-900/70 text-white hover:bg-slate-900 transition-colors"
                 >
-                  <X size={16} className="text-white" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             )}
 
-            {/* Image upload section */}
-            <div className="border-t p-3 mt-4">
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="image-upload"
-                  className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-md cursor-pointer"
-                >
-                  <Image size={20} className="text-gray-500" />
-                  <span className="font-medium">ছবি যোগ করুন</span>
-                </label>
-                <Input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className={preview ? "hidden" : ""}
-                />
+            {/* Category Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                {isBn ? "ক্যাটাগরি নির্বাচন করুন *" : "Select Category *"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((c: any) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(String(c.id))}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      selectedCategory === String(c.id)
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
+                    }`}
+                  >
+                    {c.title}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Category Radio Options */}
-            <div className="mt-4 border-t pt-4">
-              <p className="font-medium mb-2">
-                পোস্টের ক্যাটাগরি নির্বাচন করুন:
-              </p>
-              <RadioGroup
-                value={selectedCategory}
-                onValueChange={setSelectedCategory}
-                className="flex flex-wrap gap-4"
-              >
-                {categories?.map((category: any) => (
-                  <div
-                    key={category.id}
-                    className="flex items-center space-x-2"
-                  >
-                    <RadioGroupItem value={category.id} id={category.id} />
-                    <Label htmlFor={category.id} className="cursor-pointer">
-                      {category.title}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-          </div>
+            {/* Add Photo File Input */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer text-xs font-semibold transition-colors">
+                <ImageIcon className="w-4 h-4 text-emerald-600" />
+                <span>{isBn ? "ছবি সংযুক্ত করুন" : "Attach Photo"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
 
-          <div className="p-3 sticky bottom-0 bg-white border-t">
-            <Button
-              onClick={handlePostSubmit}
-              disabled={!postContent.trim() && !file}
-              className="w-full bg-green-600 hover:bg-green-700 py-5 text-white rounded-md font-medium"
-            >
-              পরবর্তী
-            </Button>
-          </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-xs h-9 px-4 rounded-xl"
+                >
+                  {isBn ? "বাতিল" : "Cancel"}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading || (!postContent.trim() && !file)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-5 rounded-xl font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isLoading ? (isBn ? "প্রকাশ হচ্ছে..." : "Posting...") : (isBn ? "পোস্ট প্রকাশ করুন" : "Publish Post")}</span>
+                </Button>
+              </div>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
   );
-};
-
-export default PostCreator;
+}

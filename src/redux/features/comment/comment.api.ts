@@ -17,30 +17,28 @@ const commentApi = baseApi.injectEndpoints({
     }),
     // Get Single post
     getSingleComment: builder.query({
-      query: (postId) => ({
+      query: (postId: number) => ({
         url: `/comments/${postId}`,
         method: "GET",
-        params: postId,
       }),
       providesTags: ["Comment"],
     }),
 
-    // Update exesting post
+    // Update existing comment
     updateComment: builder.mutation({
-      query: ({ postId }) => ({
-        url: `/comments/${postId}`,
+      query: ({ postId, commentId, content }: { postId: number; commentId: number; content: string }) => ({
+        url: `/comments/${postId}/${commentId}`,
         method: "PATCH",
-        params: postId,
+        body: { content },
       }),
       invalidatesTags: ["Comment"],
     }),
 
-    // Delete a post
+    // Delete a comment
     deleteComment: builder.mutation({
-      query: (postId) => ({
-        url: `/comments/${postId}`,
+      query: ({ postId, commentId }: { postId: number; commentId: number }) => ({
+        url: `/comments/${postId}/${commentId}`,
         method: "DELETE",
-        params: postId,
       }),
       invalidatesTags: ["Comment"],
     }),

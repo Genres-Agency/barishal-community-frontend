@@ -1,5 +1,8 @@
-import { PostProps } from "@/lib/constant";
-import { useGetAuthorQuery } from "@/redux/features/auth/authApi";
+"use client";
+
+import React, { useState } from "react";
+import Image from "next/image";
+import { useLocale } from "@/lib/i18n";
 import {
   useAddCommentMutation,
   useGetSingleCommentQuery,
@@ -9,324 +12,395 @@ import {
   useToggleLikeMutation,
 } from "@/redux/features/likes/like.api";
 import {
+  Heart,
+  MessageCircle,
+  Share2,
   Copy,
   Facebook,
-  Heart,
-  Linkedin,
-  MessageCircle,
-  Send,
-  Share2,
   Twitter,
+  Send,
+  ShieldCheck,
+  Flag,
+  Check,
 } from "lucide-react";
-import moment from "moment";
-import Image from "next/image";
-import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { toast } from "sonner";
 
-export default function PostCard({
-  content,
-  photo,
-  authorId,
-  _count,
-  id,
-}: PostProps) {
-  const { data: author } = useGetAuthorQuery(authorId);
-  const { data: comment } = useGetSingleCommentQuery(id);
+export interface PostCardProps {
+  id: number;
+  content: string;
+  photo?: string | null;
+  authorId: number;
+  createdAt: string;
+  author?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    avatar?: string | null;
+    role?: string;
+  };
+  category?: {
+    id: number;
+    title: string;
+    slug: string;
+  };
+  _count?: {
+    likes?: number;
+    comments?: number;
+  };
+}
+
+export default function PostCard(props: PostCardProps) {
+  const { id, content, photo, authorId, createdAt, category, author } = props;
+  const { locale } = useLocale();
+  const isBn = locale === "bn";
+
   const [isLiked, setIsLiked] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState(comment?.comments || []);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  console.log("comment", comment);
+  // RTK Query for comments and likes
+  const { data: commentData, refetch: refetchComments } = useGetSingleCommentQuery(id);
+  const { data: likeData, refetch: refetchLikes } = useGetSingleLikeQuery(id);
+  const [toggleLike, { isLoading: isLiking }] = useToggleLikeMutation();
+  const [addComment, { isLoading: isCommenting }] = useAddCommentMutation();
 
-  const [toggleLike, { isLoading }] = useToggleLikeMutation();
-  const { data: likes, refetch } = useGetSingleLikeQuery(id);
+  const currentLikesCount =
+    likeData?.count !== undefined
+      ? likeData.count
+      : props._count?.likes || 0;
 
-  // Add comment
-  const [addComment, { isLoading: isCommentLoading }] = useAddCommentMutation();
-  // console.log("likes", likes);
+  const currentCommentsCount =
+    commentData?.count !== undefined
+      ? commentData.count
+      : props._count?.comments || 0;
 
-  // Fix the handleLike function to ensure id is properly converted to a number
+  const commentsList = commentData?.comments || [];
+
   const handleLike = async () => {
     try {
-      console.log("post id is before like ==>", id);
-
-      await toggleLike({ postId: id });
-      // console.log("post after like id is ==>>>>>>>", id);
-      refetch(); // refresh likes count
-      // Update the local state to reflect the change
       setIsLiked(!isLiked);
-    } catch (err) {
-      // console.error("Failed to toggle like", err);
+      await toggleLike({ postId: id }).unwrap();
+      refetchLikes();
+    } catch {
+      // Revert optimistic state
+      setIsLiked(isLiked);
     }
   };
 
-  // Remove the unused handleLikeClick function since you're using handleLike
-  // const handleLikeClick = () => {
-  //   setIsLiked(!isLiked);
-  //   // Here you would typically call an API to update the like status
-  // };
-  let role;
-  if (author?.role === "SUPER_ADMIN") {
-    role = "Admin";
-  } else if (author?.role === "ADMIN") {
-    role = "Modarator";
-  }
-
-  const handleLikeClick = () => {
-    setIsLiked(!isLiked);
-    // Here you would typically call an API to update the like status
-  };
-
-  const handleCommentClick = () => {
-    setShowComments(!showComments);
-    if (showShareOptions) setShowShareOptions(false);
-  };
-
-  const handleShareClick = () => {
-    setShowShareOptions(!showShareOptions);
-    if (showComments) setShowComments(false);
-  };
-
-  const handleAddComment = async () => {
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!commentText.trim()) return;
 
     try {
-      await addComment({ postId: id, content: commentText });
-      const updatedComments = Array.isArray(comments) ? comments : [];
-      setComments([
-        ...updatedComments,
-        {
-          id: Date.now(), // Temporary ID for new comment
-          content: commentText,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      await addComment({ postId: id, content: commentText.trim() }).unwrap();
       setCommentText("");
-    } catch (error) {
-      console.error("Failed to add comment:", error);
+      refetchComments();
+      toast.success(isBn ? "মন্তব্য যুক্ত হয়েছে!" : "Comment posted!");
+    } catch {
+      toast.error(isBn ? "মন্তব্য করতে লগইন প্রয়োজন হতে পারে।" : "Failed to post comment.");
     }
   };
 
-  const handleShare = (platform: string) => {
-    // Create a shareable URL for this post
-    const postUrl = `${window.location.origin}/post/${authorId}`;
+  const handleShare = (platform: "copy" | "facebook" | "twitter" | "whatsapp") => {
+    const postUrl = typeof window !== "undefined" ? `${window.location.origin}/#post-${id}` : "";
 
     switch (platform) {
       case "copy":
-        navigator.clipboard
-          .writeText(postUrl)
-          .then(() => alert("Link copied to clipboard!"))
-          .catch((err) => console.error("Failed to copy link: ", err));
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(postUrl);
+          setCopiedLink(true);
+          setTimeout(() => setCopiedLink(false), 2000);
+          toast.success(isBn ? "পোস্টের লিঙ্ক কপি হয়েছে!" : "Link copied to clipboard!");
+        }
         break;
       case "facebook":
-        window.open(
-          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-            postUrl
-          )}`,
-          "_blank"
-        );
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`, "_blank");
         break;
       case "twitter":
-        window.open(
-          `https://twitter.com/intent/tweet?url=${encodeURIComponent(
-            postUrl
-          )}&text=${encodeURIComponent(content?.substring(0, 100) || "")}`,
-          "_blank"
-        );
+        window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl)}&text=${encodeURIComponent(content.slice(0, 100))}`, "_blank");
         break;
-      case "linkedin":
-        window.open(
-          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
-            postUrl
-          )}`,
-          "_blank"
-        );
+      case "whatsapp":
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`${content.slice(0, 80)}... ${postUrl}`)}`, "_blank");
         break;
     }
-
     setShowShareOptions(false);
   };
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-      <div className="flex items-start gap-3 mb-4">
-        <Avatar>
-          <AvatarImage
-            className="object-cover "
-            src={author?.avatar ? author?.avatar : "/assets/profile.JPG"}
-          />
-          <AvatarFallback>{author?.firstName}</AvatarFallback>
-        </Avatar>
-        <div className="flex justify-between w-full">
-          <div className="flex flex-col">
-            <h3 className="font-semibold text-gray-900">
-              {`${author?.firstName} ${author?.lastName}`}{" "}
-            </h3>
-            <div className="flex items-center gap-2">
-              {author?.role && (
-                <span className="text-sm text-gray-500">{role}</span>
-              )}
-              <span className="text-sm text-gray-500">
-                {moment(author?.createdAt).format("MMM ddd, yyyy, h:mm:ss a")}
-              </span>
-            </div>
-          </div>
+  // Format relative time in Bengali / English
+  const formatTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const diffMs = Date.now() - date.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-          <button className="mt-2 h-7 px-3 rounded-md bg-[#ffeaea] text-[#af1e1e] text-xs font-bold">
-            রিপোর্ট এন্ড লস্ট
+      if (isBn) {
+        if (diffMins < 1) return "এইমাত্র";
+        if (diffMins < 60) return `${diffMins} মিনিট আগে`;
+        if (diffHours < 24) return `${diffHours} ঘণ্টা আগে`;
+        if (diffDays === 1) return "গতকাল";
+        return `${diffDays} দিন আগে`;
+      } else {
+        if (diffMins < 1) return "just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays === 1) return "yesterday";
+        return `${diffDays}d ago`;
+      }
+    } catch {
+      return "";
+    }
+  };
+
+  // Role tag mapping
+  const role = author?.role;
+  const isSuperAdmin = role === "SUPER_ADMIN";
+  const isAdmin = role === "ADMIN";
+
+  const authorName = author
+    ? `${author.firstName || ""} ${author.lastName || ""}`.trim()
+    : isBn
+    ? "বরিশালবাসী"
+    : "Barishal Resident";
+
+  return (
+    <article
+      id={`post-${id}`}
+      className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-all group"
+    >
+      {/* Post Header: Author & Category */}
+      <div className="flex items-start justify-between gap-3 mb-3.5">
+        <div className="flex items-center gap-3">
+          <Avatar className="w-11 h-11 border-2 border-emerald-100 dark:border-emerald-950">
+            <AvatarImage
+              src={author?.avatar || "/assets/profile.jpg"}
+              alt={authorName}
+              className="object-cover"
+            />
+            <AvatarFallback className="bg-emerald-600 text-white font-bold">
+              {author?.firstName?.[0] || "B"}
+            </AvatarFallback>
+          </Avatar>
+
+          <div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white hover:text-emerald-600 transition-colors">
+                {authorName}
+              </h3>
+              {isSuperAdmin ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  <ShieldCheck className="w-3 h-3" />
+                  {isBn ? "অ্যাডমিন" : "Admin"}
+                </span>
+              ) : isAdmin ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  <ShieldCheck className="w-3 h-3" />
+                  {isBn ? "মডারেটর" : "Moderator"}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  {isBn ? "বরিশালবাসী" : "Resident"}
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {formatTime(createdAt)}
+            </p>
+          </div>
+        </div>
+
+        {/* Category Badge */}
+        {category?.title && (
+          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/40 shrink-0">
+            {category.title}
+          </span>
+        )}
+      </div>
+
+      {/* Post Text Content */}
+      <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed mb-4 whitespace-pre-line font-bangla">
+        {content}
+      </div>
+
+      {/* Post Photo (if attached) */}
+      {photo && (
+        <div className="mb-4 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 max-h-96 relative bg-slate-100 dark:bg-slate-800">
+          <img
+            src={photo}
+            alt="Barishal community post photo"
+            className="w-full h-auto max-h-96 object-cover hover:scale-101 transition-transform duration-300"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* Interaction Actions Bar */}
+      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs">
+        <div className="flex items-center gap-5">
+          {/* Like Button */}
+          <button
+            onClick={handleLike}
+            disabled={isLiking}
+            className={`flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 ${
+              isLiked ? "text-rose-600 font-bold" : "hover:text-rose-600"
+            }`}
+          >
+            <Heart
+              className={`w-4 h-4 transition-transform active:scale-125 ${
+                isLiked ? "fill-rose-600 text-rose-600" : ""
+              }`}
+            />
+            <span>{currentLikesCount}</span>
+            <span className="hidden sm:inline">{isBn ? "লাইক" : "Likes"}</span>
+          </button>
+
+          {/* Comments Toggle */}
+          <button
+            onClick={() => {
+              setShowComments(!showComments);
+              if (showShareOptions) setShowShareOptions(false);
+            }}
+            className={`flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/30 ${
+              showComments ? "text-teal-600 font-bold" : "hover:text-teal-600"
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>{currentCommentsCount}</span>
+            <span className="hidden sm:inline">{isBn ? "মন্তব্য" : "Comments"}</span>
+          </button>
+
+          {/* Share Button */}
+          <button
+            onClick={() => {
+              setShowShareOptions(!showShareOptions);
+              if (showComments) setShowComments(false);
+            }}
+            className={`flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 ${
+              showShareOptions ? "text-slate-900 dark:text-white font-bold" : ""
+            }`}
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="hidden sm:inline">{isBn ? "শেয়ার" : "Share"}</span>
           </button>
         </div>
-      </div>
-      <p className="text-gray-700 mb-4">{content}</p>
-      {photo && (
-        <div className="mb-4">
-          <Image
-            src={photo}
-            alt="Post content"
-            width={600}
-            height={400}
-            className="rounded-lg w-full object-cover"
-          />
-        </div>
-      )}
-      <div className="flex items-center gap-6 text-gray-500">
+
+        {/* Report / Citizen Moderation Button */}
         <button
-          className={`flex items-center gap-2 ${
-            isLiked ? "text-red-500" : "hover:text-red-500"
-          }`}
-          onClick={handleLike}
+          onClick={() => {
+            toast.info(
+              isBn
+                ? "পোস্টটি মডারেটর টিমের পর্যালোচনার জন্য চিহ্নিত করা হয়েছে।"
+                : "Post reported for moderator review."
+            );
+          }}
+          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1"
+          title={isBn ? "রিপোর্ট করুন" : "Report post"}
         >
-          <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
-          <span>{likes?.count || 0}</span>
-        </button>
-        <button
-          className={`flex items-center gap-2 ${
-            showComments ? "text-blue-500" : "hover:text-blue-500"
-          }`}
-          onClick={handleCommentClick}
-        >
-          <MessageCircle
-            size={20}
-            fill={showComments ? "currentColor" : "none"}
-          />
-          <span>{comment?.count}</span>
-        </button>
-        <button
-          className={`flex items-center gap-2 ${
-            showShareOptions ? "text-green-500" : "hover:text-green-500"
-          }`}
-          onClick={handleShareClick}
-        >
-          <Share2 size={20} fill={showShareOptions ? "currentColor" : "none"} />
-          <span>{"4"}</span>
+          <Flag className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Share options */}
+      {/* Share Dropdown */}
       {showShareOptions && (
-        <div className="mt-4 pt-4 border-t">
-          <h4 className="font-medium mb-3">শেয়ার করুন</h4>
-          <div className="flex flex-wrap gap-4">
-            <button
-              onClick={() => handleShare("copy")}
-              className="flex flex-col items-center gap-1 hover:text-green-500"
-            >
-              <div className="bg-gray-100 p-3 rounded-full">
-                <Copy size={20} />
-              </div>
-              <span className="text-xs">লিংক কপি</span>
-            </button>
-            <button
-              onClick={() => handleShare("facebook")}
-              className="flex flex-col items-center gap-1 hover:text-blue-600"
-            >
-              <div className="bg-gray-100 p-3 rounded-full">
-                <Facebook size={20} />
-              </div>
-              <span className="text-xs">ফেসবুক</span>
-            </button>
-            <button
-              onClick={() => handleShare("twitter")}
-              className="flex flex-col items-center gap-1 hover:text-blue-400"
-            >
-              <div className="bg-gray-100 p-3 rounded-full">
-                <Twitter size={20} />
-              </div>
-              <span className="text-xs">টুইটার</span>
-            </button>
-            <button
-              onClick={() => handleShare("linkedin")}
-              className="flex flex-col items-center gap-1 hover:text-blue-700"
-            >
-              <div className="bg-gray-100 p-3 rounded-full">
-                <Linkedin size={20} />
-              </div>
-              <span className="text-xs">লিংকডইন</span>
-            </button>
-          </div>
+        <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 animate-fadeIn flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mr-2">
+            {isBn ? "শেয়ার করুন:" : "Share:"}
+          </span>
+          <button
+            onClick={() => handleShare("copy")}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-medium hover:bg-slate-100"
+          >
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copiedLink ? (isBn ? "কপি হয়েছে!" : "Copied!") : isBn ? "লিঙ্ক কপি" : "Copy Link"}</span>
+          </button>
+          <button
+            onClick={() => handleShare("facebook")}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 text-xs font-medium hover:opacity-90"
+          >
+            <Facebook className="w-3.5 h-3.5" />
+            <span>Facebook</span>
+          </button>
+          <button
+            onClick={() => handleShare("whatsapp")}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-xs font-medium hover:opacity-90"
+          >
+            <span>💬</span>
+            <span>WhatsApp</span>
+          </button>
+          <button
+            onClick={() => handleShare("twitter")}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 text-xs font-medium hover:opacity-90"
+          >
+            <Twitter className="w-3.5 h-3.5" />
+            <span>Twitter/X</span>
+          </button>
         </div>
       )}
 
-      {/* Comments section */}
+      {/* Comments Drawer / Section */}
       {showComments && (
-        <div className="mt-4 pt-4 border-t">
-          <h4 className="font-medium mb-3">মন্তব্য</h4>
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3.5 animate-fadeIn">
+          {/* Add Comment Input */}
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder={isBn ? "আপনার মতামত বা মন্তব্য লিখুন..." : "Write a comment..."}
+              className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bangla"
+            />
+            <button
+              type="submit"
+              disabled={isCommenting || !commentText.trim()}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-xs disabled:opacity-50 transition-colors flex items-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isBn ? "পাঠান" : "Post"}</span>
+            </button>
+          </form>
 
-          {/* Comment list */}
-          <div className="space-y-3 mb-4">
-            {comment?.comments?.map((comment) => (
-              <div key={comment.id} className="flex gap-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage
-                    className="object-cover"
-                    src={"/assets/profile.JPG"}
-                  />
-                  <AvatarFallback>U</AvatarFallback>
-                </Avatar>
-                <div className="bg-gray-100 p-2 rounded-lg flex-1">
-                  <div className="flex justify-between items-start">
-                    <p className="text-sm">{comment.content}</p>
-                    <span className="text-xs text-gray-500">
-                      {moment(comment.createdAt).fromNow()}
-                    </span>
+          {/* List of comments */}
+          {commentsList.length > 0 ? (
+            <div className="space-y-2.5 pt-1">
+              {commentsList.map((c: any) => (
+                <div
+                  key={c.id}
+                  className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 flex items-start gap-2.5 text-xs"
+                >
+                  <Avatar className="w-7 h-7 shrink-0">
+                    <AvatarImage src={c.user?.avatar || "/assets/profile.jpg"} />
+                    <AvatarFallback className="bg-slate-300 dark:bg-slate-700 text-[10px]">
+                      {c.user?.firstName?.[0] || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {c.user ? `${c.user.firstName || ""} ${c.user.lastName || ""}`.trim() : (isBn ? "নাগরিক" : "Resident")}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {formatTime(c.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-300 font-bangla leading-relaxed">
+                      {c.content}
+                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Add comment input */}
-          <div className="flex gap-2 items-center">
-            <Avatar className="w-8 h-8">
-              <AvatarImage className="object-cover" src="/assets/profile.JPG" />
-              <AvatarFallback>ME</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 flex gap-2 bg-gray-100 rounded-full px-3 py-1">
-              <input
-                type="text"
-                placeholder="আপনার মন্তব্য লিখুন..."
-                className="bg-transparent flex-1 outline-none text-sm"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleAddComment();
-                  }
-                }}
-              />
-              <button
-                onClick={handleAddComment}
-                className="text-blue-500"
-                disabled={!commentText.trim()}
-              >
-                <Send size={16} />
-              </button>
+              ))}
             </div>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-400 text-center py-2">
+              {isBn ? "এখনো কোনো মন্তব্য নেই। প্রথম মন্তব্যটি আপনিই করুন!" : "No comments yet. Be the first to comment!"}
+            </p>
+          )}
         </div>
       )}
-    </div>
+    </article>
   );
 }

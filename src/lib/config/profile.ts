@@ -38,19 +38,52 @@ export const mockUserProfile: UserProfile = {
   },
 };
 
-export const posts = [
+import { PostProps } from "../constant";
+
+export interface ProfilePostItem extends PostProps {
+  title: string;
+  timestamp: string;
+  likes: number;
+  comments: number;
+}
+
+export const posts: ProfilePostItem[] = [
   {
+    id: 101,
+    authorId: 1,
+    categoryId: 1,
+    hashTagId: 1,
     title: "বরিশালে ডেভেলপার মিটআপ",
     timestamp: "২ দিন আগে",
-    content: "আগামী শনিবার বরিশালে একটি ডেভেলপার মিটআপের আয়োজন করা হয়েছে...",
+    content: "আগামী শনিবার বরিশালে একটি কমিউনিটি মিটআপের আয়োজন করা হয়েছে...",
+    photo: "/assets/community-event.png",
+    createdAt: "2026-03-10T10:00:00Z",
+    updatedAt: "2026-03-10T10:00:00Z",
     likes: 24,
     comments: 12,
+    shares: 4,
+    _count: {
+      likes: 24,
+      comments: 12,
+    },
   },
   {
+    id: 102,
+    authorId: 1,
+    categoryId: 1,
+    hashTagId: 1,
     title: "নতুন আইটি প্রশিক্ষণ কেন্দ্র",
     timestamp: "৫ দিন আগে",
-    content: "বরিশালে নতুন একটি আইটি প্রশিক্ষণ কেন্দ্র চালু হতে যাচ্ছে...",
+    content: "বরিশালে নতুন একটি আইটি প্রশিক্ষণ ও কমিউনিটি সেন্টার চালু হতে যাচ্ছে...",
+    photo: "",
+    createdAt: "2026-03-08T10:00:00Z",
+    updatedAt: "2026-03-08T10:00:00Z",
     likes: 18,
     comments: 8,
+    shares: 2,
+    _count: {
+      likes: 18,
+      comments: 8,
+    },
   },
 ];
